@@ -47,27 +47,35 @@ def main():
                                           [0, 0, 1]])
                 dist_coeffs = np.zeros((4, 1))
                 tag_size = 0.165  # Size of the AprilTag (meters, adjust this to your tag size)
-
-                retval, rvec, tvec = cv2.solvePnP(detection.corners_3d, detection.corners, camera_matrix, dist_coeffs)
+                half_size = tag_size / 2
+                tag_corners_3d = np.array([
+                    [-half_size, half_size, 0],
+                    [half_size, half_size, 0],
+                    [half_size, -half_size, 0],
+                    [-half_size, -half_size, 0]
+                ], dtype=np.float32)
+                retval, rvec, tvec = cv2.solvePnP(tag_corners_3d, detection.corners, camera_matrix, dist_coeffs)
 
                 # Convert rotation vector to rotation matrix
                 R, _ = cv2.Rodrigues(rvec)
                 eulerAngles = rotation_matrix_to_euler_angles(R)
 
-                # Calculate inverse rotation matrix
                 R_inv = np.linalg.inv(R)
+
+                # Create a homography matrix for the inverse transformation
+                homography_inv = np.eye(3)
+                homography_inv[:3, :3] = R_inv
 
                 # Apply the inverse rotation to the frame
                 rows, cols = frame.shape[:2]
-                M_inv = R_inv[:2, :2]
-                dst = cv2.warpAffine(frame, M_inv, (cols, rows))
+                dst = cv2.warpPerspective(frame, homography_inv, (cols, rows))
 
                 # Display translation and rotation
                 print(f'Translation (tvec): {tvec.flatten()}')
                 print(f'Rotation (Euler Angles): {eulerAngles}')
 
                 # Display the resulting frame with rotation correction
-                cv2.imshow('AprilTag Detection with Correction', dst)
+            cv2.imshow('AprilTag Detection with Correction', dst)
 
         # Display the original frame
         cv2.imshow('AprilTag Detection', frame)

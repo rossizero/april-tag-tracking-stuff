@@ -3,31 +3,17 @@ import numpy as np
 import apriltag
 import math
 
-def rotation_matrix_to_euler_angles(R):
-    sy = math.sqrt(R[0, 0] * R[0, 0] + R[1, 0] * R[1, 0])
-    singular = sy < 1e-6
-
-    if not singular:
-        x = math.atan2(R[2, 1], R[2, 2])
-        y = math.atan2(-R[2, 0], sy)
-        z = math.atan2(R[1, 0], R[0, 0])
-    else:
-        x = math.atan2(-R[1, 2], R[1, 1])
-        y = math.atan2(-R[2, 0], sy)
-        z = 0
-
-    return np.array([x, y, z])
 
 def main():
     # Initialize video capture
     cap = cv2.VideoCapture(0)
-
     # Initialize the AprilTag detector
     options = apriltag.DetectorOptions(families="tag36h11")
     detector = apriltag.Detector(options)
 
     while cap.isOpened():
         ret, frame = cap.read()
+        #dst = frame
         cv2.imshow('AprilTag Detection', frame)
         if not ret:
             break
@@ -40,43 +26,43 @@ def main():
                 # Draw the bounding box around the detected AprilTag
                 pts = detection.corners.reshape((-1, 1, 2)).astype(np.int32)
                 cv2.polylines(frame, [pts], True, (0, 255, 0), 2)
-
-                # Pose estimation
-                camera_matrix = np.array([[600, 0, gray.shape[1] / 2],
-                                          [0, 600, gray.shape[0] / 2],
-                                          [0, 0, 1]])
-                dist_coeffs = np.zeros((4, 1))
-                tag_size = 0.165  # Size of the AprilTag (meters, adjust this to your tag size)
-                half_size = tag_size / 2
-                tag_corners_3d = np.array([
-                    [-half_size, half_size, 0],
-                    [half_size, half_size, 0],
-                    [half_size, -half_size, 0],
-                    [-half_size, -half_size, 0]
-                ], dtype=np.float32)
-                retval, rvec, tvec = cv2.solvePnP(tag_corners_3d, detection.corners, camera_matrix, dist_coeffs)
-
-                # Convert rotation vector to rotation matrix
-                R, _ = cv2.Rodrigues(rvec)
-                eulerAngles = rotation_matrix_to_euler_angles(R)
-
-                R_inv = np.linalg.inv(R)
-
-                # Create a homography matrix for the inverse transformation
-                homography_inv = np.eye(3)
-                homography_inv[:3, :3] = R_inv
+                pose, _, _ = detector.detection_pose(detection, (600, 600, gray.shape[1] / 2, gray.shape[0] / 2), 0.2)
+                print("pose", pose)
 
                 # Apply the inverse rotation to the frame
                 rows, cols = frame.shape[:2]
-                dst = cv2.warpPerspective(frame, homography_inv, (cols, rows))
+                if np.linalg.det(detection.homography) == 0:
+                    print("Homography matrix is not invertible.")
 
-                # Display translation and rotation
-                print(f'Translation (tvec): {tvec.flatten()}')
-                print(f'Rotation (Euler Angles): {eulerAngles}')
+                b = np.linalg.inv(detection.homography)
+                homography_inv = np.eye(3)
+                homography_inv[:2, :2] = b[:2, :2]
+                dst = cv2.warpPerspective(frame, homography_inv, (cols, rows), flags=cv2.INTER_LINEAR)
+                fx, fy = (600, 600)
+                cx, cy = (gray.shape[1] / 2, gray.shape[0] / 2)
+                camera_matrix = np.array([
+                    [fx, 0, cx],
+                    [0, fy, cy],
+                    [0, 0, 1]
+                ])
+                
+                tag_point = np.array([0, 0.1, 0, 1])
 
-                # Display the resulting frame with rotation correction
-            cv2.imshow('AprilTag Detection with Correction', dst)
-
+                # Apply the homography matrix to the point
+                #transformed_point = detection.homography @ tag_point
+                # Normalize the transformed point
+                #transformed_point /= transformed_point[2]
+                # Extract the x and y coordinates
+                #image_point = transformed_point[:2].astype(np.int32)
+                print(pose.shape)
+                h_point = pose @ tag_point
+                camera_point = h_point[:3]
+                image_point_homogeneous = camera_matrix @ camera_point
+                image_point = image_point_homogeneous[:2] / image_point_homogeneous[2]
+                print(image_point)
+                cv2.circle(frame, image_point[:2].astype(np.int32), 5, (0,0,255), -1)
+        
+            #cv2.imshow('Warped Frame', dst)
         # Display the original frame
         cv2.imshow('AprilTag Detection', frame)
 

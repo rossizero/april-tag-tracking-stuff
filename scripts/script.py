@@ -19,12 +19,12 @@ def cut_trapezoid(image, points, pose):
     
     # Convert the points to a proper format (required by OpenCV)
     pts = np.array(points, dtype=np.int32)
-
+    pts = sort_points_clockwise(pts)
     # Create a mask with the same dimensions as the image, initialized with zeros (black)
     mask = np.zeros_like(image)
     
     # Create a white filled polygon on the mask with the same shape as the trapezoid
-    cv2.fillPoly(mask, [sort_points_clockwise(pts)], (255, 255, 255))
+    cv2.fillPoly(mask, [pts], (255, 255, 255))
     
     # Use the mask on the original image to get the trapezoid region
     trapezoid = cv2.bitwise_and(image, mask)
@@ -36,29 +36,61 @@ def cut_trapezoid(image, points, pose):
     center = np.array([w/2, h/2])
     # Crop the region of interest from the original image using the bounding box dimensions
     cropped_trapezoid = trapezoid[y:y+h, x:x+w]
-    # Extract rotation and translation components
-    rotation_part = pose[:2, :2]
-    translation_part = pose[:2, 3]  # atually irrelevant
-    initial_transformation_matrix = np.hstack([rotation_part.T, translation_part.reshape(2, 1)])
     
-    # rotate around center = move to the upper left, rotate then move back
-    trans_center = np.array([
-        [1, 0, -center[1]],
-        [0, 1, -center[0]]
-    ], dtype=np.float32)
-    
-    reverse_trans_center = np.array([
-        [1, 0, center[1]],
-        [0, 1, center[0]]
-    ], dtype=np.float32)
+    if False:  # revert the rotation only
+        # Extract rotation and translation components
+        rotation_part = pose[:2, :2]
+        translation_part = pose[:2, 3]  # atually irrelevant
+        initial_transformation_matrix = np.hstack([rotation_part.T, translation_part.reshape(2, 1)])
+        
+        # rotate around center = move to the upper left, rotate then move back
+        trans_center = np.array([
+            [1, 0, -center[1]],
+            [0, 1, -center[0]]
+        ], dtype=np.float32)
 
-    # Combine the transformations
-    transformation_matrix = reverse_trans_center @ np.vstack([initial_transformation_matrix, [0, 0, 1]]) @ np.vstack([trans_center, [0, 0, 1]])
+        reverse_trans_center = np.array([
+            [1, 0, center[1]],
+            [0, 1, center[0]]
+        ], dtype=np.float32)
 
-    # The final transformation matrix should be 2x3
-    final_transformation_matrix = transformation_matrix[:2, :]
-    if cropped_trapezoid.shape[0] > 0 and cropped_trapezoid.shape[1] > 0:
-        cropped_trapezoid = cv2.warpAffine(cropped_trapezoid, transformation_matrix, (w, h))
+        # Combine the transformations
+        transformation_matrix = reverse_trans_center @ np.vstack([initial_transformation_matrix, [0, 0, 1]]) @ np.vstack([trans_center, [0, 0, 1]])
+
+        # The final transformation matrix should be 2x3
+        final_transformation_matrix = transformation_matrix[:2, :]
+        if cropped_trapezoid.shape[0] > 0 and cropped_trapezoid.shape[1] > 0:
+            cropped_trapezoid = cv2.warpAffine(cropped_trapezoid, transformation_matrix, (w, h))
+    else: # revert complete pose
+        original_points = points.astype(np.float32) #pts.astype(np.float32)
+        w = max(w, h)
+        h = w
+        transformed_points = np.float32([#sort_points_clockwise(np.float32([
+            [0, 0],
+            [0, h],
+            [w, h],
+            [w, 0],
+        ])#)
+        center = np.array([w/2, h/2])
+         # rotate around center = move to the upper left, rotate then move back
+        trans_center = np.array([
+            [1, 0, -center[1]],
+            [0, 1, -center[0]],
+            [0, 0, 1] 
+        ], dtype=np.float32)
+
+        reverse_trans_center = np.array([
+            [1, 0, center[1]],
+            [0, 1, center[0]],
+            [0, 0, 1] 
+        ], dtype=np.float32)
+
+        M = cv2.getPerspectiveTransform(transformed_points, original_points)
+        M_inv = np.linalg.inv(M)
+        M_fin = M_inv #reverse_trans_center @ M_inv @ trans_center
+
+        if cropped_trapezoid.shape[0] > 0 and cropped_trapezoid.shape[1] > 0:
+            cropped_trapezoid = cv2.warpPerspective(image, M_fin, (w, h))
     return cropped_trapezoid
 
 
@@ -67,9 +99,9 @@ def main():
     cap = cv2.VideoCapture(0)
     
     tag_points = np.array([
-        [0.1, 0.1, 0],
         [-0.1, -0.1, 0],
         [-0.1, 0.1, 0],
+        [0.1, 0.1, 0],
         [0.1, -0.1, 0],
         #[-0.14, 0.2, -0.23],
     ])

@@ -115,7 +115,6 @@ def main():
             pose, _, _ = detector.detection_pose(detection, (fx, fy, cx, cy), tag_size)
             # homography = detection.homography
 
-            
             h_tag_points = np.hstack((tag_points, np.ones((tag_points.shape[0], 1))))  # convert in homogeneous coords
             posed_points = pose @ h_tag_points.T  # apply pose
             camera_points = posed_points.T[:, :-1]  # convert back into 3d points

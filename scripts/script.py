@@ -2,6 +2,64 @@ import cv2
 import numpy as np
 import apriltag
 import math
+def sort_points_clockwise(points):
+    # Calculate the centroid of the points
+    center = tuple(np.mean(points, axis=0))
+    
+    def angle_from_center(point):
+        return math.atan2(point[1] - center[1], point[0] - center[0])
+    
+    # Sort points based on the angle from the center
+    sorted_points = sorted(points, key=angle_from_center)
+    
+    return np.array(sorted_points)
+
+# Function to cut out a trapezoid
+def cut_trapezoid(image, points, pose):
+    
+    # Convert the points to a proper format (required by OpenCV)
+    pts = np.array(points, dtype=np.int32)
+
+    # Create a mask with the same dimensions as the image, initialized with zeros (black)
+    mask = np.zeros_like(image)
+    
+    # Create a white filled polygon on the mask with the same shape as the trapezoid
+    cv2.fillPoly(mask, [sort_points_clockwise(pts)], (255, 255, 255))
+    
+    # Use the mask on the original image to get the trapezoid region
+    trapezoid = cv2.bitwise_and(image, mask)
+    
+    # Find bounding box of the trapezoid
+    rect = cv2.boundingRect(pts)
+    x, y, w, h = rect
+    
+    center = np.array([w/2, h/2])
+    # Crop the region of interest from the original image using the bounding box dimensions
+    cropped_trapezoid = trapezoid[y:y+h, x:x+w]
+    # Extract rotation and translation components
+    rotation_part = pose[:2, :2]
+    translation_part = pose[:2, 3]  # atually irrelevant
+    initial_transformation_matrix = np.hstack([rotation_part.T, translation_part.reshape(2, 1)])
+    
+    # rotate around center = move to the upper left, rotate then move back
+    trans_center = np.array([
+        [1, 0, -center[1]],
+        [0, 1, -center[0]]
+    ], dtype=np.float32)
+    
+    reverse_trans_center = np.array([
+        [1, 0, center[1]],
+        [0, 1, center[0]]
+    ], dtype=np.float32)
+
+    # Combine the transformations
+    transformation_matrix = reverse_trans_center @ np.vstack([initial_transformation_matrix, [0, 0, 1]]) @ np.vstack([trans_center, [0, 0, 1]])
+
+    # The final transformation matrix should be 2x3
+    final_transformation_matrix = transformation_matrix[:2, :]
+    if cropped_trapezoid.shape[0] > 0 and cropped_trapezoid.shape[1] > 0:
+        cropped_trapezoid = cv2.warpAffine(cropped_trapezoid, transformation_matrix, (w, h))
+    return cropped_trapezoid
 
 
 def main():
@@ -13,6 +71,7 @@ def main():
         [-0.1, -0.1, 0],
         [-0.1, 0.1, 0],
         [0.1, -0.1, 0],
+        #[-0.14, 0.2, -0.23],
     ])
     
     # Initialize the AprilTag detector
@@ -59,7 +118,10 @@ def main():
             # draw
             for point in image_points:
                 cv2.circle(frame, point[:2].astype(np.int32), 5, (0, 0, 255), -1)
-
+            
+            small = cut_trapezoid(frame, image_points, pose)
+            if small.shape[0] > 0 and small.shape[1] > 0:
+                cv2.imshow('rect only', small)
         cv2.imshow('Labeled detection', frame)
 
         if cv2.waitKey(1) & 0xFF == ord('q'):

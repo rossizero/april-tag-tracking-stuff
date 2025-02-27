@@ -1,0 +1,9 @@
+targets:
+  main:
+    resources:
+      RemotePlace:
+        name: video
+    drivers:
+      USBVideoDriver: {}
+options:
+  coordinator_address: '20.52.229.118:20408'

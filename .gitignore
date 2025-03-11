@@ -1,0 +1,17 @@
+# Ignore Python virtual environment
+venv/
+.env/
+
+# Byte-compiled / cached files
+__pycache__/
+*.py[cod]
+*$py.class
+
+# Virtual environment
+venv/
+.env/
+
+# Editor files
+*.vscode/
+.idea/
+*.swp

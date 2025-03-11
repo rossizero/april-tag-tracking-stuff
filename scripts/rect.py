@@ -5,11 +5,17 @@ import cv2
 
 class InterestingRect:
     def __init__(self, name: str, p1: np.array, p2: np.array, p3: np.array, p4: np.array):
+        self.config_points = np.array([
+            p1, p2, p3, p4
+        ])
+        self.points = self.config_points.copy()
+        self.name = name
+    
+    def set_camera_points(self, p1: np.array, p2: np.array, p3: np.array, p4: np.array):
         self.points = np.array([
             p1, p2, p3, p4
         ])
-        self.name = name
-    
+
     def __get_sorted_points(self):
         center = np.mean(self.points, axis=0)
         
@@ -49,15 +55,19 @@ class InterestingRect:
         if trapezoid.shape[0] > 0 and trapezoid.shape[1] > 0:
             return trapezoid
 
-    def get_warped_image(self, image, width, height) -> np.array:# pose, width, height) -> np.array:
+    def get_warped_image(self, image, size:int = 0) -> np.array:
         """
         returns the perspective-corrected image
         """
         trapezoid = self.__get_trapezoid(image)
 
         original_points = self.points.astype(np.float32)
-        x, y, w, h = self.__get_bounding_rect()
-        local_center = self.get_center(local=True)
+        _, _, width, height = self.__get_bounding_rect()
+        config_points_mm = self.config_points[:, :2].copy() * 1000
+        _, _, w, h = cv2.boundingRect(config_points_mm.astype(np.int32))
+        width = size if size > 0 else width
+
+        height = int(width * h/w)
 
         target_rect = np.float32([
             [0, 0],

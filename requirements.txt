@@ -1,0 +1,5 @@
+apriltag>=0.0.16
+numpy>=2.2.3
+opencv-python>=4.11.0.86
+pip>=24.0
+PyYAML>=6.0.2

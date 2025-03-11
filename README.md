@@ -1,2 +1,2 @@
 # april-tag-tracking-stuff
-Test
+`pip install -r requirements.txt`

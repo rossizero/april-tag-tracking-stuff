@@ -39,13 +39,13 @@ def main(config):
     tag_size = variables["tag_size"]
     fx, fy = variables["focal_length"]
     tag_id = variables["tag_id"]
-    apriltag_family = variables["apriltag_family"]
+    tag_family = variables["tag_family"]
     
 
     cap = cv2.VideoCapture(0)
 
     # Initialize the AprilTag detector
-    options = apriltag.DetectorOptions(families=apriltag_family)
+    options = apriltag.DetectorOptions(families=tag_family)
     detector = apriltag.Detector(options)
     
     # do stuff

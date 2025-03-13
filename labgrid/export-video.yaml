@@ -1,2 +1,4 @@
 video:
   USBVideo: {}
+
+### labgrid-exporter -c 20.52.229.118:20408 export-video.yaml 

@@ -10,7 +10,10 @@
             "request": "launch",
             "program": "${file}",
             "console": "integratedTerminal",
-            "python": "venv/bin/python3"
+            "python": "venv/bin/python3", 
+            "env": {
+                "LG_USERNAME": "rossi",
+            }
         }
     ]
 }

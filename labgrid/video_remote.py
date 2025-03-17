@@ -2,6 +2,7 @@ import logging
 import time
 
 from labgrid import Environment
+from labgrid.driver.usbvideodriver import VideoQuality
 from labgrid.logging import basicConfig, StepLogger
 import os
 import cv2
@@ -22,24 +23,11 @@ t = e.get_target()
 
 p = t.get_driver("USBVideoDriver")
 print(p.video.path)
-p.start_stream(caps_hint="mid")
-#cap = cv2.VideoCapture(p, apiPreference=cv2.CAP_GSTREAMER, params=[])
 
-# if gstreamer opencv support
-#gst_pipeline = (
-#    "shmsrc socket-path=/tmp/gst-shm ! "
-#    "video/x-raw,format=BGR,width=1280,height=720,framerate=30/1 ! "
-#    "videoconvert ! appsink sync=false max-buffers=1 drop=true"
-#)
-#print(gst_pipeline)
-#cap = cv2.VideoCapture(gst_pipeline, apiPreference=cv2.CAP_GSTREAMER)
-#if not cap.isOpened():
-#    print("Error: Could not open GStreamer pipeline.")
-#    exit()
+p.start_stream(caps_hint="high")
 
 while p.is_stream_open():
     ret, frame = p.read()
-    print(frame.shape)
 
     if ret:
         cv2.imshow("video", frame)

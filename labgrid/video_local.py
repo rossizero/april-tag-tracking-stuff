@@ -13,7 +13,7 @@ p = t.get_driver("USBVideoDriver")
 
 print(p.video.path)
 
-p.start_stream(caps_hint="mid")
+p.start_stream(caps_hint="high")
 
 while p.is_stream_open():
     ret, frame = p.read()

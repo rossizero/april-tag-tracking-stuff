@@ -10,43 +10,30 @@ if not cap.isOpened():
 
 
 def get_reference_frame():
-    # Capture reference image (before LEDs turn on)
-    print("Capturing reference image... Please ensure LEDs are OFF.")
-
     # Variables for stabilization check
-    stability_threshold = 0.02  # Adjust this for sensitivity
-    diffs = np.arange(10)
+    stability_threshold = 0.02  # magic number
+    diffs = np.arange(10)  # some numbers to force some iterations
     previous_frame = None
     stabilized = False
 
-    print("Waiting for camera to stabilize...")
-
     while not stabilized:
         ret, frame = cap.read()
-        # Convert to grayscale
         gray = cv2.cvtColor(frame, cv2.COLOR_BGR2GRAY)
 
-        # Compare with previous frame if it exists
         if previous_frame is not None:
             diff = cv2.absdiff(previous_frame, gray)
             mean_diff = np.mean(diff)
             diffs = np.append(diffs, mean_diff)
             diffs = diffs[1:]
-            print(f"Frame change: {mean_diff:.2f}", np.std(diffs))  # Debugging info
+            print(f"Frame change: {mean_diff:.2f}", np.std(diffs))  # TODO remove
 
             if np.std(diffs) < stability_threshold:
                 stabilized = True
                 previous_frame = frame
                 break
-
-        # Update previous frame for next comparison
         previous_frame = gray
 
-    # Use reference_frame as the baseline for LED tracking
-    print("Reference frame captured.")
     return previous_frame
-
-
 
 
 # Convert reference image to grayscale
@@ -57,35 +44,44 @@ reference_gray = cv2.GaussianBlur(reference_gray, (9, 9), 0)
 blink_times = []
 start_time = time.time()
 
+led_detected = False
+
 while True:
     ret, frame = cap.read()
     if not ret:
         break
 
-    # Convert current frame to grayscale
+    # gray and blur to minimize noise
     gray = cv2.cvtColor(frame, cv2.COLOR_BGR2GRAY)
     gray = cv2.GaussianBlur(gray, (9, 9), 0)
-
-    # Compute absolute difference between reference and current frame
     diff = cv2.absdiff(reference_gray, gray)
 
     # Apply thresholding to highlight changed areas (LEDs turning on)
-    _, thresholded = cv2.threshold(diff, 128, 255, cv2.THRESH_BINARY)
+    # input: image, threshold, max value, what to do: in this case everything < thresh = 0 else 255
+    _, thresholded = cv2.threshold(diff, 60, 255, cv2.THRESH_BINARY)  # TODO make threshold configurable
 
     # Find contours of changed regions
+    # input: "binary" image, how to draw contours: only external, how "many": in this case less is better
     contours, _ = cv2.findContours(thresholded, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_TC89_KCOS)
 
+    old_led_detected = led_detected
+    
     led_detected = False
     for contour in contours:
         if cv2.contourArea(contour) > 20:  # Adjust sensitivity if needed
-            led_detected = True
             x, y, w, h = cv2.boundingRect(contour)
-            cv2.rectangle(frame, (x, y), (x + w, y + h), (0, 255, 0), 2)
+            aspect_ratio = w / h
+            if 0.9 < aspect_ratio < 1.1: # we more or less only need quadratic rects, because led = point light source
+                led_detected = True
+                cv2.rectangle(frame, (x, y), (x + w, y + h), (255, 255, 0), 2)
 
     # Detect first LED blink based on new contours appearing
     if led_detected and not blink_times:
         blink_times.append(time.time() - start_time)
         print(f"First LED activation detected at {blink_times[-1]:.2f} seconds")
+    
+    if led_detected != old_led_detected:
+        print("LED is", "on" if led_detected else "off")
 
     # Display results
     cv2.imshow("LED Tracking", frame)

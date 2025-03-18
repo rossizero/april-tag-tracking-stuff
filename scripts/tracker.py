@@ -1,11 +1,7 @@
 import cv2
 import numpy as np
 import apriltag
-import math
 from rect import InterestingRect
-import yaml
-import os
-import argparse
 
 
 class Tracker:
@@ -42,53 +38,47 @@ class Tracker:
             rects[i].set_camera_points(*points)
         return rects
     
-    def run(self):
-        cap = cv2.VideoCapture(0)
+    def get_apriltag_detection(self, frame):
+        gray = frame
 
-        # Initialize the AprilTag detector
+        # Convert if it's a color image
+        if len(frame.shape) == 3 and frame.shape[2] == 3:
+            gray = cv2.cvtColor(frame, cv2.COLOR_BGR2GRAY) 
+        
         options = apriltag.DetectorOptions(families=self.tag_family)
         detector = apriltag.Detector(options)
+        detections = detector.detect(gray)
+
+        if detections:
+            # only do sth if the right tag id is being detected
+            # weird shit happens if there are more than one of this tag id visible
+            for d in detections:
+                if d.tag_id == self.tag_id:
+                    detection = d
+                    break
+            if detection:
+                cx, cy = (frame.shape[1] / 2, frame.shape[0] / 2)
+                pose, _, _ = detector.detection_pose(detection, (self.fx, self.fy, cx, cy), self.tag_size)
+                return detection, pose
+        return None
+
+    def get_corrected_rects(self, frame):
+        result = self.get_apriltag_detection(frame)
+        ret = []
         
-        # do stuff
-        while cap.isOpened():
-            ret, frame = cap.read()
-            if not ret:
-                break
-            
-            gray = cv2.cvtColor(frame, cv2.COLOR_BGR2GRAY)
+        if result is not None:
+            # do stuff for each area of interest
+            _, pose = result
 
             # camera stuff
-            cx, cy = (gray.shape[1] / 2, gray.shape[0] / 2)
+            cx, cy = (frame.shape[1] / 2, frame.shape[0] / 2)
             camera_matrix = self.get_camera_matrix(self.fx, self.fy, cx, cy)
 
-            detections = detector.detect(gray)
+            image_rects = self.calculate_image_points(self.rects, pose, camera_matrix)
 
-            if detections:
-                detection = None
-
-                # only do sth if the right tag id is being detected
-                # weird shit happens if there are more than one of this tag id visible
-                for d in detections:
-                    if d.tag_id == self.tag_id:
-                        detection = d
-                        break
-                
-                if detection:
-                    # Draw the bounding box around the detected AprilTag
-                    pts = detection.corners.reshape((-1, 1, 2)).astype(np.int32)
-                    cv2.polylines(frame, [pts], True, (0, 255, 0), 2)
-
-                    # do stuff for each area of interest
-                    pose, _, _ = detector.detection_pose(detection, (self.fx, self.fy, cx, cy), self.tag_size)
-                    image_rects = self.calculate_image_points(self.rects, pose, camera_matrix)
-                    for ir in image_rects:
-                        img = ir.get_warped_image(frame, 300)
-                        if img is not None:
-                            cv2.imshow(ir.name, img)
-                
-            cv2.imshow('frame', frame)
-            if cv2.waitKey(1) & 0xFF == ord('q'):
-                break
-
-        cap.release()
-        cv2.destroyAllWindows()
+            for ir in image_rects:
+                img = ir.get_warped_image(frame, 300)
+                if img is not None:
+                    ret.append((ir, img))
+        return ret
+    

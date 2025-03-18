@@ -1,0 +1,6 @@
+targets:
+  main:
+    resources:
+      USBVideo: {}
+    drivers:
+      USBVideoDriver: {}

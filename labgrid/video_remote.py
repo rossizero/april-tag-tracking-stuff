@@ -1,8 +1,6 @@
 import logging
-import time
 
 from labgrid import Environment
-from labgrid.driver.usbvideodriver import VideoQuality
 from labgrid.logging import basicConfig, StepLogger
 import os
 import cv2
